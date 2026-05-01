@@ -6,7 +6,9 @@ The audio mixer is a software application that allows users to import multiple a
 2. Install [pyinstaller](https://pypi.org/project/pyinstaller/) to build the audiomixer executable `pip install pyinstaller`
 3. Build the executable with this command 
 
-```pyinstaller --onefile --noconsole \
+```
+pyinstaller --onefile --noconsole \
 --icon "music.ico" \
 --add-binary "bin/ffmpeg.exe;bin" \
-audio_playlist.py```
+audio_playlist.py
+```
