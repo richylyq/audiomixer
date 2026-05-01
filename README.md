@@ -10,5 +10,5 @@ The audio mixer is a software application that allows users to import multiple a
 pyinstaller --onefile --noconsole \
 --icon "music.ico" \
 --add-binary "bin/ffmpeg.exe;bin" \
-audio_playlist.py
+gui.py
 ```
