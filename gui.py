@@ -1,11 +1,13 @@
 import customtkinter as ctk
 from tkinter import filedialog
-from PIL import Image
 import subprocess
 import os
 import threading
 import random
 import sys
+from PIL import Image
+import shutil
+import tempfile
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -56,7 +58,25 @@ class AudioPlaylistApp(ctk.CTk):
         # Repeat Control
         # =========================
         ctk.CTkLabel(self, text="Repeat Count").pack(pady=5)
-        ctk.CTkSlider(self, from_=1, to=5, variable=self.repeat_count).pack(fill="x", padx=20)
+        slider_frame = ctk.CTkFrame(self)
+        slider_frame.pack(fill="x", padx=20)
+
+        ctk.CTkLabel(slider_frame, text="Repeat Count").pack(anchor="w")
+
+        self.repeat_label = ctk.CTkLabel(slider_frame, text="1")
+        self.repeat_label.pack(anchor="e")
+
+        def update_slider(value):
+            self.repeat_label.configure(text=str(int(value)))
+
+        ctk.CTkSlider(
+            slider_frame,
+            from_=1,
+            to=3,
+            number_of_steps=2,  # ensures only 1–5
+            variable=self.repeat_count,
+            command=update_slider
+        ).pack(fill="x")
 
         # =========================
         # Start Button
@@ -110,24 +130,83 @@ class AudioPlaylistApp(ctk.CTk):
             self.output_file.set(file)
             self.output_label.configure(text=file)
 
+    # def rename_files(self):
+    #     if not self.files:
+    #         return
+
+    #     self.log("✏️ Renaming files...")
+
+    #     renamed_files = []
+
+    #     for i, file_path in enumerate(self.files, start=1):
+    #         folder = os.path.dirname(file_path)
+    #         ext = os.path.splitext(file_path)[1]
+
+    #         new_name = f"{i:02d}{ext}"
+    #         new_path = os.path.join(folder, new_name)
+
+    #         try:
+    #             os.rename(file_path, new_path)
+    #             renamed_files.append(new_path)
+    #             self.log(f"Renamed: {os.path.basename(file_path)} → {new_name}")
+    #         except Exception as e:
+    #             self.log(f"❌ Rename failed: {file_path} | {e}")
+    #             renamed_files.append(file_path)  # fallback
+
+    #     self.files = renamed_files
+
+    def prepare_temp_files(self):
+        if not self.files:
+            return None
+
+        self.log("📁 Creating temporary workspace...")
+
+        temp_dir = tempfile.mkdtemp(prefix="playlist_")
+        temp_files = []
+
+        for i, file_path in enumerate(self.files, start=1):
+            ext = os.path.splitext(file_path)[1]
+            new_name = f"{i:02d}{ext}"
+            new_path = os.path.join(temp_dir, new_name)
+
+            try:
+                shutil.copy2(file_path, new_path)
+                temp_files.append(new_path)
+                self.log(f"Copied: {os.path.basename(file_path)} → {new_name}")
+            except Exception as e:
+                self.log(f"❌ Copy failed: {file_path} | {e}")
+
+        return temp_dir, temp_files
+
     def build_playlist(self):
+
         if not self.files or not self.output_file.get():
             self.log("❌ Please select files and output.")
-            return
+            return       
         
         if self.cover_path.get() and self.output_file.get().endswith(".wav"):
             self.log("⚠️ WAV does not support album art. Please use MP3.")
             return
 
-        ffmpeg = get_ffmpeg_path()
+        ffmpeg = get_ffmpeg_path() 
+        
+        temp_data = self.prepare_temp_files()
+
+        if not temp_data:
+            self.log("❌ Failed to prepare files.")
+            return
+        
+        temp_dir, working_files = temp_data
 
         try:
             self.log("🎲 Shuffling files...")
 
-            shuffled = self.files.copy()
+            shuffled = working_files.copy()
             random.shuffle(shuffled)
 
             final_list = shuffled * int(self.repeat_count.get())
+
+        
 
             self.log("📜 Final playlist order:")
             for f in final_list:
@@ -185,9 +264,13 @@ class AudioPlaylistApp(ctk.CTk):
                 self.log("✅ Playlist created successfully!")
             else:
                 self.log("❌ Failed to create playlist.")
-
-        except Exception as e:
-            self.log(f"ERROR: {str(e)}")
+        finally:
+            if temp_dir and os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+                self.log("🧹 Temporary files cleaned up.")
+                
+        # except Exception as e:
+        #     self.log(f"ERROR: {str(e)}")
 
     def start(self):
         thread = threading.Thread(target=self.build_playlist)
